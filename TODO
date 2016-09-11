@@ -1,0 +1,7 @@
+* store hash of password instead of paintext password, and compare hash with given password (via openssl EVP_BytesToKey?)
+* change file permissions to be user with r/o
+* pick lincense and add header with rights reserved to me
+* add 'check' target to makefile: run spellcheck, linter (clang?) and unit tests.
+* add readme
+* add versioning
+* add 'install' target to makefile

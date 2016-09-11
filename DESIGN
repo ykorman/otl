@@ -1,0 +1,9 @@
+* a binary that generates a one time password: either time based (180 seconds) or while the binary is running.
+* a pam module that can authenticate the same user with the one time password.
+
+* the binary 'otl' will output the password to stdout
+* use a strong password generation library
+* the password won't be stored in memory, a hash(?) will be stored with a timestamp for timeout.
+* allow the user to input the one time password
+
+* use otpw and pam_systemd as code samples for pam modules.
