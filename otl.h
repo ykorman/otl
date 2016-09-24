@@ -1,6 +1,7 @@
 #ifndef _OTL_H
 #define _OTL_H
 
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>

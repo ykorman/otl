@@ -14,6 +14,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	const char *username;
 	char filepath[PATH_MAX];
 	char password[PASSWORD_SIZE + 1];
+	char *pam_auth_token;
 	char *service;
 	char ident[64];
 
@@ -70,13 +71,31 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 		return PAM_AUTH_ERR;
 	}
 
-	/* TODO: get password from PAM and compare to file */
+	ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pam_auth_token);
+	if (ret != PAM_SUCCESS) {
+		syslog(LOG_NOTICE, "pam_get_item(PAM_AUTHTOK) failed: %s",
+		       pam_strerror(pamh, ret));
+		return PAM_AUTH_ERR;
+	}
+
+	if (!pam_auth_token) {
+		syslog(LOG_NOTICE, "pam_get_item(PAM_AUTHTOK) returned NULL");
+		return PAM_AUTH_ERR;
+	}
+
+	ret = strncmp(password, pam_auth_token, strlen(password));
+	if (ret) {
+		syslog(LOG_AUTH, "user %s provided wrong password", username);
+		return PAM_AUTH_ERR;
+	}
 
 	ret = close(fd);
 	if (ret) {
 		syslog(LOG_NOTICE, "close failed: %m");
 		return PAM_AUTH_ERR;
 	}
+
+	syslog(LOG_AUTH, "user %s login successful", username);
 
 	return PAM_SUCCESS;
 }

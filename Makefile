@@ -5,7 +5,7 @@ RANDH = /usr/include/openssl/rand.h
 PAMH = /usr/include/security/pam_modules.h
 
 otl: otl.c otl.h $(RANDH)
-	gcc -Werror -c $< -lcrypto
+	gcc -Werror -o $@ $< -lcrypto
 
 pam_otl.so: pam_otl.o $(PAMH)
 	gcc -shared -o $@ $< -lpam
