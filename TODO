@@ -11,3 +11,7 @@
 * document build dependencies - openssl-devel, pam-devel, make, gcc (fedora)
 * builddeps ubuntu - libssl-dev, libpam0g-dev, libc-bin(?), make, gcc
 * add builddeps and test configuration to vagrant file
+* use PAM_CONST where appropriate ?
+* write a README
+* generate gh-pages website
+* use travis or another online ci

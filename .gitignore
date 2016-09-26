@@ -2,3 +2,4 @@ otl
 *.swp
 *.o
 *.so
+.vagrant

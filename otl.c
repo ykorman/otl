@@ -50,7 +50,7 @@ static int store_password(char *password, unsigned int len)
 		return -EFAULT;
 	}
 
-	fd = open(filepath, O_CREAT | O_RDWR);
+	fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 	if (fd == -1) {
 		otl_err("open(%s) failed: %m\n", filepath);
 		return -errno;
