@@ -1,11 +1,11 @@
 
 all: otl pam_otl.so
 
-RANDH = /usr/include/openssl/rand.h
 PAMH = /usr/include/security/pam_modules.h
+SODIUMH = /usr/include/sodium.h
 
-otl: otl.c otl.h $(RANDH)
-	gcc -Werror -o $@ $< -lcrypto
+otl: otl.c otl.h $(SODIUMH)
+	gcc -Werror -o $@ $< -lsodium
 
 pam_otl.so: pam_otl.o $(PAMH)
 	gcc -shared -o $@ $< -lpam
@@ -13,8 +13,8 @@ pam_otl.so: pam_otl.o $(PAMH)
 pam_otl.o: pam_otl.c otl.h
 	gcc -fPIC -c $<
 
-$(RANDH):
-	@echo "otl requires openssl-devel."
+$(SODIUMH):
+	@echo "otl requires libsodium-devel."
 	@exit 1
 
 $(PAMH):

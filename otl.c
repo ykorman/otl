@@ -1,4 +1,4 @@
-#include <openssl/rand.h>
+#include <sodium.h>
 
 #include "otl.h"
 
@@ -19,13 +19,7 @@ static int generate_password(char *password, unsigned int len)
 	memset(buf, 0, sizeof(buf));
 
 	while (left) {
-		int err = RAND_bytes(buf, BUF_SIZE);
-
-		if (err != 1) {
-			otl_err("failed to generate random bytes err=%d\n",
-				err);
-			return err;
-		}
+		randombytes_buf(buf, BUF_SIZE);
 
 		for (i = 0; i < BUF_SIZE; ++i) {
 			if (left && isalnum(buf[i])) {
@@ -35,6 +29,8 @@ static int generate_password(char *password, unsigned int len)
 			}
 		}
 	}
+
+	sodium_memzero(buf, BUF_SIZE);
 
 	return 0;
 }
@@ -92,6 +88,8 @@ int main(int argc, char **argv)
 	err = store_password(password, PASSWORD_SIZE);
 	if (err)
 		return err;
+
+	sodium_memzero(password, PASSWORD_SIZE);
 
 	return 0;
 }
