@@ -83,11 +83,11 @@ int main(int argc, char **argv)
 	if (err)
 		return err;
 
-	printf("\n%s\n", password);
-
 	err = store_password(password, PASSWORD_SIZE);
 	if (err)
 		return err;
+
+	printf("\n%s\n", password);
 
 	sodium_memzero(password, PASSWORD_SIZE);
 
