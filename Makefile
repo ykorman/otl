@@ -8,7 +8,7 @@ otl: otl.c otl.h $(SODIUMH)
 	gcc -Werror -o $@ $< -lsodium
 
 pam_otl.so: pam_otl.o $(PAMH)
-	gcc -shared -o $@ $< -lpam
+	gcc -shared -o $@ $< -lpam -lsodium
 
 pam_otl.o: pam_otl.c otl.h
 	gcc -fPIC -c $<

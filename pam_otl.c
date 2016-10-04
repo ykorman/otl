@@ -57,17 +57,11 @@ static int request_pass(pam_handle_t *pamh)
 	return PAM_SUCCESS;
 }
 
-PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
-				   const char **argv)
+static int open_log(pam_handle_t *pamh)
 {
-	int fd, ret;
-	struct passwd *pw;
-	const char *username;
-	char filepath[PATH_MAX];
-	char saved_pass[PASSWORD_SIZE + 1];
-	char *given_pass;
 	char *service;
 	char ident[64];
+	int ret;
 
 	ret = pam_get_item(pamh, PAM_SERVICE, (const void**) &service);
 	if (ret != PAM_SUCCESS) {
@@ -80,6 +74,15 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	}
 
 	openlog(ident, LOG_CONS | LOG_PID, LOG_AUTH);
+
+	return PAM_SUCCESS;
+}
+
+static int store_filepath(pam_handle_t *pamh, char *filepath)
+{
+	const char *username;
+	struct passwd *pw;
+	int ret;
 
 	ret = pam_get_user(pamh, &username, NULL);
 	if (ret != PAM_SUCCESS) {
@@ -97,11 +100,18 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 		return PAM_USER_UNKNOWN;
 	}
 
-	ret = sprintf(filepath, "%s/%s", pw->pw_dir, PASSWORD_FILE);
+	ret = sprintf(filepath, "%s/%s", pw->pw_dir, STORE_FILE);
 	if (ret < 0) {
 		syslog(LOG_NOTICE, "failed to construct filepath");
 		return PAM_AUTH_ERR;
 	}
+
+	return PAM_SUCCESS;
+}
+
+static int load_store(const char *filepath, struct password_store *store)
+{
+	int fd, ret, err = PAM_SUCCESS;
 
 	fd = open(filepath, O_RDONLY);
 	if (fd == -1) {
@@ -110,17 +120,75 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
-	memset(saved_pass, 0, PASSWORD_SIZE + 1);
-
-	ret = read(fd, saved_pass, PASSWORD_SIZE);
-	if (ret != PASSWORD_SIZE) {
+	ret = read(fd, store, sizeof(*store));
+	if (ret != sizeof(*store)) {
 		if (ret == -1) {
 			syslog(LOG_NOTICE, "read failed: %m");
 		} else {
 			syslog(LOG_NOTICE, "partial read: %d", ret);
 		}
+		err = PAM_AUTH_ERR;
+	}
+
+	ret = close(fd);
+	if (ret)
+		syslog(LOG_NOTICE, "close failed: %m");
+
+	return err;
+}
+
+static int check_timestamp(struct password_store *store)
+{
+	time_t now = time(NULL);
+	double diff;
+
+	diff = difftime(now, store->timestamp);
+	if (diff > TIMEOUT_SEC) {
+		syslog(LOG_AUTH, "password timeout\n");
 		return PAM_AUTH_ERR;
 	}
+
+	return PAM_SUCCESS;
+}
+
+static int check_password(const struct password_store *store,
+			  const char *pass)
+{
+	int ret;
+
+	ret = crypto_pwhash_scryptsalsa208sha256_str_verify(store->hash, pass,
+							    strlen(pass));
+	if (ret) {
+		syslog(LOG_AUTH, "wrong password");
+		return PAM_AUTH_ERR;
+	}
+
+	return PAM_SUCCESS;
+}
+
+PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
+				   const char **argv)
+{
+	int ret;
+	char filepath[PATH_MAX];
+	char *given_pass;
+	struct password_store store = {0};
+
+	ret = open_log(pamh);
+	if (ret)
+		return ret;
+
+	ret = store_filepath(pamh, filepath);
+	if (ret != PAM_SUCCESS)
+		return ret;
+
+	ret = load_store(filepath, &store);
+	if (ret != PAM_SUCCESS)
+		return ret;
+
+	ret = check_timestamp(&store);
+	if (ret != PAM_SUCCESS)
+		return ret;
 
 	ret = request_pass(pamh);
 	if (ret != PAM_SUCCESS)
@@ -138,19 +206,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 		return PAM_AUTH_ERR;
 	}
 
-	ret = strncmp(saved_pass, given_pass, strlen(saved_pass));
-	if (ret) {
-		syslog(LOG_AUTH, "user %s provided wrong password", username);
-		return PAM_AUTH_ERR;
+	ret = check_password(&store, given_pass);
+	if (ret != PAM_SUCCESS) {
+		return ret;
 	}
 
-	ret = close(fd);
-	if (ret) {
-		syslog(LOG_NOTICE, "close failed: %m");
-		return PAM_AUTH_ERR;
-	}
-
-	syslog(LOG_AUTH, "user %s login successful", username);
+	syslog(LOG_AUTH, "login successful");
 
 	return PAM_SUCCESS;
 }

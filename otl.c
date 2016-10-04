@@ -35,12 +35,35 @@ static int generate_password(char *password, unsigned int len)
 	return 0;
 }
 
-static int store_password(char *password, unsigned int len)
+static int fill_store(struct password_store *store, char *password,
+		      unsigned int len)
+{
+	int err;
+
+	err = crypto_pwhash_scryptsalsa208sha256_str(store->hash, password, len,
+						     crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE,
+						     crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE);
+	if (err) {
+		otl_err("crypto_pwhash_scryptsalsa208sha256_str mem error\n");
+		return -ENOMEM;
+	}
+
+	store->timestamp = time(NULL);
+
+	return 0;
+}
+
+static int write_store(char *password, unsigned int len)
 {
 	int fd, ret, err = 0;
 	char filepath[PATH_MAX];
+	struct password_store store = {0};
 
-	ret = sprintf(filepath, "%s/%s", getenv("HOME"), PASSWORD_FILE);
+	ret = fill_store(&store, password, len);
+	if (ret)
+		return ret;
+
+	ret = sprintf(filepath, "%s/%s", getenv("HOME"), STORE_FILE);
 	if (ret < 0) {
 		otl_err("failed to construct filepath\n");
 		return -EFAULT;
@@ -52,13 +75,13 @@ static int store_password(char *password, unsigned int len)
 		return -errno;
 	}
 
-	ret = write(fd, password, len);
-	if (ret != len) {
+	ret = write(fd, &store, sizeof(store));
+	if (ret != sizeof(store)) {
 		if (ret == -1) {
 			otl_err("write failed: %m\n");
 			err = -errno;
 		} else {
-			otl_err("failed to write password\n");
+			otl_err("failed to write store\n");
 			err = -ENOSPC;
 		}
 	}
@@ -75,21 +98,29 @@ static int store_password(char *password, unsigned int len)
 int main(int argc, char **argv)
 {
 	char password[PASSWORD_SIZE + 1];
-	int err;
+	int err = 0;
 
-	memset(password, 0, PASSWORD_SIZE + 1);
+	err = sodium_init();
+	if (err == -1) {
+		otl_err("sodium_init failed\n");
+		return -EPERM;
+	}
+
+	sodium_memzero(password, PASSWORD_SIZE + 1);
+	sodium_mlock(password, PASSWORD_SIZE + 1);
 
 	err = generate_password(password, PASSWORD_SIZE);
 	if (err)
-		return err;
+		goto out;
 
-	err = store_password(password, PASSWORD_SIZE);
+	err = write_store(password, PASSWORD_SIZE);
 	if (err)
-		return err;
+		goto out;
 
-	printf("\n%s\n", password);
+	printf("%s", password);
 
-	sodium_memzero(password, PASSWORD_SIZE);
+out:
+	sodium_munlock(password, PASSWORD_SIZE + 1);
 
 	return 0;
 }
