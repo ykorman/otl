@@ -7,6 +7,13 @@
 
 #include "otl.h"
 
+struct user {
+	char *name;
+	char *home;
+	uid_t uid;
+	gid_t gid;
+};
+
 static int request_pass(pam_handle_t *pamh)
 {
 	struct pam_message msg = {
@@ -78,7 +85,7 @@ static int open_log(pam_handle_t *pamh)
 	return PAM_SUCCESS;
 }
 
-static int store_filepath(pam_handle_t *pamh, char *filepath)
+static int get_user(pam_handle_t *pamh, struct user *user)
 {
 	const char *username;
 	struct passwd *pw;
@@ -94,30 +101,65 @@ static int store_filepath(pam_handle_t *pamh, char *filepath)
 		}
 	}
 
+	errno = 0;
+
 	pw = getpwnam(username);
 	if (pw == NULL) {
-		syslog(LOG_NOTICE, "error reading passwd entry");
-		return PAM_USER_UNKNOWN;
+		if (!errno) {
+			syslog(LOG_NOTICE, "user not found it passwd");
+			return PAM_USER_UNKNOWN;
+		} else {
+			syslog(LOG_NOTICE, "error reading passwd entry: %m");
+			return PAM_AUTH_ERR;
+		}
 	}
 
-	ret = sprintf(filepath, "%s/%s", pw->pw_dir, STORE_FILE);
+	/* TODO: these are static buffers that might be overwritten, bettern to
+	 * strdup or use getpwnam_r instead
+	 */
+	user->name = pw->pw_name;
+	user->home = pw->pw_dir;
+	user->uid = pw->pw_uid;
+	user->gid = pw->pw_gid;
+
+	return PAM_SUCCESS;
+}
+
+static int load_store(struct user *user, struct password_store *store)
+{
+	int fd, ret, err = PAM_SUCCESS;
+	char filepath[PATH_MAX];
+	uid_t old_uid;
+	gid_t old_gid;
+
+	ret = sprintf(filepath, "%s/%s", user->home, STORE_FILE);
 	if (ret < 0) {
 		syslog(LOG_NOTICE, "failed to construct filepath");
 		return PAM_AUTH_ERR;
 	}
 
-	return PAM_SUCCESS;
-}
+	old_uid = geteuid();
+	old_gid = getegid();
 
-static int load_store(const char *filepath, struct password_store *store)
-{
-	int fd, ret, err = PAM_SUCCESS;
+	ret = setegid(user->gid);
+	if (ret == -1) {
+		syslog(LOG_NOTICE, "set user gid failed: %m");
+		return PAM_AUTH_ERR;
+	}
+
+	ret = seteuid(user->uid);
+	if (ret == -1) {
+		syslog(LOG_NOTICE, "set user uid failed: %m");
+		err = PAM_AUTH_ERR;
+		goto unelevate;
+	}
 
 	fd = open(filepath, O_RDONLY);
 	if (fd == -1) {
 		syslog(LOG_NOTICE, "open(%s) failed: %m\n",
 			    filepath);
-		return PAM_AUTHINFO_UNAVAIL;
+		err = PAM_AUTHINFO_UNAVAIL;
+		goto unelevate;
 	}
 
 	ret = read(fd, store, sizeof(*store));
@@ -133,6 +175,10 @@ static int load_store(const char *filepath, struct password_store *store)
 	ret = close(fd);
 	if (ret)
 		syslog(LOG_NOTICE, "close failed: %m");
+
+unelevate:
+	seteuid(old_uid);
+	setegid(old_gid);
 
 	return err;
 }
@@ -169,20 +215,20 @@ static int check_password(const struct password_store *store,
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 				   const char **argv)
 {
-	int ret;
-	char filepath[PATH_MAX];
-	char *given_pass;
 	struct password_store store = {0};
+	struct user user = {0};
+	char *given_pass;
+	int ret;
 
 	ret = open_log(pamh);
 	if (ret)
 		return ret;
 
-	ret = store_filepath(pamh, filepath);
+	ret = get_user(pamh, &user);
 	if (ret != PAM_SUCCESS)
 		return ret;
 
-	ret = load_store(filepath, &store);
+	ret = load_store(&user, &store);
 	if (ret != PAM_SUCCESS)
 		return ret;
 
