@@ -1,6 +1,7 @@
+* support selinux :-(
+* invalidate password after a successful login
 * how do i test this? is there a test module for pam? maybe a docker image with
   custom linux-pam configuration to run tests against?.
-* pick lincense and add header with rights reserved to me
 * add 'check' target to makefile: run spellcheck, linter (clang?) and unit tests.
 * add readme
 * add versioning
