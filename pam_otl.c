@@ -64,6 +64,37 @@ static int request_pass(pam_handle_t *pamh)
 	return PAM_SUCCESS;
 }
 
+static int get_password(pam_handle_t *pamh, char **password_p)
+{
+	int ret;
+
+	ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)password_p);
+	if (ret != PAM_SUCCESS) {
+		syslog(LOG_NOTICE, "pam_get_item(PAM_AUTHTOK) failed: %s",
+		       pam_strerror(pamh, ret));
+		return PAM_AUTH_ERR;
+	}
+
+	if (*password_p) {
+		syslog(LOG_INFO, "get password from pam");
+		return PAM_SUCCESS;
+	}
+
+	ret = request_pass(pamh);
+	if (ret != PAM_SUCCESS)
+		return ret;
+
+	ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)password_p);
+	if (ret != PAM_SUCCESS) {
+		syslog(LOG_NOTICE, "pam_get_item(PAM_AUTHTOK) failed: %s",
+		       pam_strerror(pamh, ret));
+		return PAM_AUTH_ERR;
+	}
+
+	return PAM_SUCCESS;
+
+}
+
 static int open_log(pam_handle_t *pamh)
 {
 	char *service;
@@ -190,7 +221,7 @@ static int check_timestamp(struct password_store *store)
 
 	diff = difftime(now, store->timestamp);
 	if (diff > TIMEOUT_SEC) {
-		syslog(LOG_AUTH, "password timeout\n");
+		syslog(LOG_INFO, "password timeout\n");
 		return PAM_AUTH_ERR;
 	}
 
@@ -205,7 +236,7 @@ static int check_password(const struct password_store *store,
 	ret = crypto_pwhash_scryptsalsa208sha256_str_verify(store->hash, pass,
 							    strlen(pass));
 	if (ret) {
-		syslog(LOG_AUTH, "wrong password");
+		syslog(LOG_INFO, "wrong password");
 		return PAM_AUTH_ERR;
 	}
 
@@ -236,19 +267,9 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	if (ret != PAM_SUCCESS)
 		return ret;
 
-	ret = request_pass(pamh);
-	if (ret != PAM_SUCCESS)
-		return ret;
-
-	ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&given_pass);
+	ret = get_password(pamh, &given_pass);
 	if (ret != PAM_SUCCESS) {
-		syslog(LOG_NOTICE, "pam_get_item(PAM_AUTHTOK) failed: %s",
-		       pam_strerror(pamh, ret));
-		return PAM_AUTH_ERR;
-	}
-
-	if (!given_pass) {
-		syslog(LOG_NOTICE, "pam_get_item(PAM_AUTHTOK) returned NULL");
+		syslog(LOG_NOTICE, "failed to get password");
 		return PAM_AUTH_ERR;
 	}
 
@@ -257,7 +278,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 		return ret;
 	}
 
-	syslog(LOG_AUTH, "login successful");
+	syslog(LOG_INFO, "login successful");
 
 	return PAM_SUCCESS;
 }

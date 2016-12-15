@@ -1,3 +1,4 @@
+* i don't see our syslog prefix in the journal, why?
 * support selinux :-(
 * invalidate password after a successful login
 * how do i test this? is there a test module for pam? maybe a docker image with
@@ -15,3 +16,4 @@
 * use travis or another online ci
 * create a chrome app that can gets an ssh key and gets the otl password
   automatically (see maybe https://chromium.googlesource.com/apps/libapps/+/master/nassh/doc/FAQ.md)
+* make a demo video
