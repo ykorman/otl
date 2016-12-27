@@ -1,17 +1,16 @@
-* i don't see our syslog prefix in the journal, why?
-* support selinux :-(
 * invalidate password after a successful login
-* how do i test this? is there a test module for pam? maybe a docker image with
-  custom linux-pam configuration to run tests against?.
+* find another popular web service for the cloud to demostrate with
+* implement "make install" command
+* expand on how to update PAM configuration
+* don't see our syslog prefix in the journal
+* support selinux properly
+* add tests
+** how do i test this? is there a test module for pam? maybe a docker image with
+   custom linux-pam configuration to run tests against?.
 * add 'check' target to makefile: run spellcheck, linter (clang?) and unit tests.
-* add readme
 * add versioning
-* add 'install' target to makefile
-* document build dependencies - libsodium-devel, pam-devel, make, gcc (fedora)
-* builddeps ubuntu - libsodium-dev, libpam0g-dev, libc-bin(?), make, gcc
 * add builddeps and test configuration to vagrant file
 * use PAM_CONST where appropriate ?
-* write a README
 * generate gh-pages website
 * use travis or another online ci
 * create a chrome app that can gets an ssh key and gets the otl password
